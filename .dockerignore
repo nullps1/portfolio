@@ -1,0 +1,10 @@
+.git
+.github
+.gitignore
+.dockerignore
+compose.yaml
+Dockerfile
+README.md
+deploy/*.sh
+deploy/Caddyfile.snippet
+docs

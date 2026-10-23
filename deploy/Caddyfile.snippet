@@ -1,0 +1,19 @@
+# Append to /etc/caddy/Caddyfile on the Oracle host. Do not add until DNS points at this server,
+# otherwise Caddy retries ACME for these names and can hit Let's Encrypt failure limits.
+weeksitsolutions.com {
+	encode zstd gzip
+	log
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Strict-Transport-Security "max-age=63072000"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8081
+}
+
+www.weeksitsolutions.com {
+	redir https://weeksitsolutions.com{uri} permanent
+}
