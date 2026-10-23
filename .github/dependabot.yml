@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions in .github/workflows current. Dependabot reads the
+  # "# vX.Y.Z" comment next to each pinned SHA and rewrites both on update.
+  # It only opens pull requests; nothing is merged or deployed automatically.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
