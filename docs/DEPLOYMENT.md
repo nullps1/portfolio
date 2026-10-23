@@ -55,16 +55,17 @@ Certificates are issued automatically on first request and stored under `/var/li
 
 ## DNS (IONOS)
 
-| Record | Host | Current (public DNS) | Required |
-|--------|------|----------------------|----------|
-| A | `@` | `216.198.79.1` (Vercel) | `129.146.74.225` |
-| CNAME | `www` | `5fb0a757aedd5afa.vercel-dns-017.com` | `weeksitsolutions.com` (applied 2026-10-23) |
+| Record | Host | Value |
+|--------|------|-------|
+| A | `@` | `129.146.74.225` |
+| CNAME | `www` | `weeksitsolutions.com` |
 
-Leave untouched: NS, MX (Zoho), TXT (Zoho verification, SPF), and the `status`, `home`, `panel`, and `pack`
-subdomains. Lower the TTL on the changed records beforehand to speed up a rollback. Check the IONOS dashboard
-for records that public DNS can't show; there are no public AAAA records today.
+The site moved from Vercel to this server on 2026-10-23 and Vercel has since been retired. Leave untouched:
+NS, MX (Zoho), TXT (Zoho verification, SPF), and the `status`, `home`, `panel`, and `pack` subdomains.
+There are no AAAA records; add one only if the server gets IPv6 and Caddy is verified on it.
 
-**Rollback:** restore the two original records. Vercel keeps serving until then.
+**Rollback:** there is no DNS fallback any more. Roll back the site by redeploying a previous image
+(see "Rollback (container)" below), or restore `/etc/caddy/Caddyfile.pre-portfolio` if a Caddy change is at fault.
 
 ## Health, logs, status
 
