@@ -90,8 +90,16 @@ visudo -cf "$TMP" >/dev/null || {
   rm -f "$TMP"
   die "sudoers validation failed; nothing installed"
 }
-install -o root -g root -m 0440 "$TMP" "$SUDOERS_FILE"
+# Stage under a dotted name (sudo's @includedir ignores it), validate, then rename atomically so a
+# crash can never leave a truncated file that breaks sudo for every user.
+SUDOERS_NEW="/etc/sudoers.d/.portfolio-deploy.new"
+install -o root -g root -m 0440 "$TMP" "$SUDOERS_NEW"
 rm -f "$TMP"
+visudo -cf "$SUDOERS_NEW" >/dev/null || {
+  rm -f "$SUDOERS_NEW"
+  die "staged sudoers file failed validation; nothing installed"
+}
+mv -f "$SUDOERS_NEW" "$SUDOERS_FILE"
 visudo -c >/dev/null
 
 echo "==> Read-only checks"

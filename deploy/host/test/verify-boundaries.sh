@@ -56,8 +56,20 @@ out="$(ci 'status; id' 2>&1)"
 expect_rc "shell metacharacters are rejected" 2 "$?"
 never_ran "injection did not execute" "$out"
 
-ssh -tt -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes "${CI_USER}@${HOST}" </dev/null >/dev/null 2>&1
-expect_rc "no interactive shell (empty request is rejected)" 2 "$?"
+out="$(ci </dev/null 2>&1)"
+expect_rc "empty request reaches the program and is rejected" 2 "$?" "$out"
+never_ran "empty request did not start a shell" "$out"
+
+# `restrict` forbids terminals, so a forced PTY must be refused by sshd. Exit 255 alone is not enough
+# (it also means connection or authentication failure): the refusal message must be present.
+out="$(ssh -tt -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes \
+  "${CI_USER}@${HOST}" </dev/null 2>&1 >/dev/null)"
+rc=$?
+if [ "$rc" = 255 ] && grep -q 'PTY allocation request failed' <<<"$out"; then
+  ok "forced PTY is refused by sshd (no interactive session)"
+else
+  bad "forced PTY is refused by sshd (no interactive session)" "rc=$rc: $out"
+fi
 
 refused "TCP forwarding is refused" ssh -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15 \
   -W 127.0.0.1:22 "${CI_USER}@${HOST}" </dev/null
@@ -89,7 +101,8 @@ refused "sudo refuses any other command" adm "sudo -u ${CI_USER} sudo -n /bin/tr
 refused "no direct docker access" adm "sudo -u ${CI_USER} docker ps"
 for target in /opt/portfolio-deploy/compose.yaml /usr/local/sbin/portfolio-deploy \
   /home/portfolio-deploy/.ssh/authorized_keys /etc/sudoers.d/portfolio-deploy; do
-  refused "cannot write ${target}" adm "sudo -u ${CI_USER} sh -c 'echo x >> ${target}'"
+  # test -w only asks the kernel; it never modifies a file that turns out to be writable.
+  refused "cannot write ${target}" adm "sudo -u ${CI_USER} test -w ${target}"
 done
 for target in /var/lib/portfolio-deploy/state /var/log/portfolio-deploy.log; do
   refused "cannot read ${target}" adm "sudo -u ${CI_USER} cat ${target}"
