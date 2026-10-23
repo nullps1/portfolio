@@ -1,6 +1,7 @@
 # Files executed on Linux (server, CI, container build) must keep LF line endings on every
 # checkout, including Windows clones with core.autocrlf=true; CRLF breaks shebangs and `set -e`.
 *.sh        text eol=lf
+deploy/host/portfolio-deploy text eol=lf
 Dockerfile  text eol=lf
 *.yml       text eol=lf
 *.yaml      text eol=lf

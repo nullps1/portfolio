@@ -1,23 +1,29 @@
 name: Deploy
 
-# Manual only until credentials, the production environment, and rollback have been reviewed.
-# To deploy on every push to main, add:  push: { branches: [main] }
+# Manual only. Nothing deploys on push, schedule, or pull request.
+# build : builds the ARM64 image and pushes it to GHCR (no deployment secrets in this job).
+# deploy: runs under the "Production" environment (required reviewer + main-only branch policy),
+#         asks the restricted host entry point to switch to the image DIGEST, verifies the public
+#         site, and rolls back through the same entry point if anything fails.
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
+permissions: {}
 
 concurrency:
-  group: deploy
+  group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production # configure required reviewers on this environment
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,22 +48,147 @@ jobs:
           build-args: GIT_SHA=${{ github.sha }}
           tags: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
 
-      - name: Deploy to Oracle (restricted SSH forced command, rolls back on failure)
+      - name: Require an immutable sha256 digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::build produced no valid digest"; exit 1; }
+          echo "image digest: $DIGEST"
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions: {} # this job needs no GitHub token scopes
+    environment:
+      name: Production
+      url: https://weeksitsolutions.com
+    env:
+      SITE: weeksitsolutions.com
+      IMAGE: ghcr.io/${{ github.repository }}@${{ needs.build.outputs.digest }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+    steps:
+      - name: Prepare SSH (pinned host key, dedicated key, no agent or forwarding)
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
-          IMAGE_REPO: ${{ github.repository }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          install -m 700 -d ~/.ssh
+          set -euo pipefail
+          # DEPLOY_HOST must be an IPv4 literal (curl --resolve pins to it) and both values go into an ssh
+          # config file, so reject anything else, including newlines.
+          [[ "$DEPLOY_HOST" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo "::error::DEPLOY_HOST must be an IPv4 address"; exit 1; }
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || { echo "::error::DEPLOY_USER is not a valid account name"; exit 1; }
+          umask 077
+          mkdir -p ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
-            "ghcr.io/${IMAGE_REPO}@${IMAGE_DIGEST}"
+          cat > ~/.ssh/config <<EOF
+          Host target
+            HostName ${DEPLOY_HOST}
+            User ${DEPLOY_USER}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            StrictHostKeyChecking yes
+            BatchMode yes
+            ForwardAgent no
+            RequestTTY no
+            ConnectTimeout 15
+            ServerAliveInterval 15
+            ServerAliveCountMax 4
+          EOF
+          cat > "$RUNNER_TEMP/verify.sh" <<'EOF'
+          #!/usr/bin/env bash
+          # Public health verification: HTTP 200, valid TLS, and X-Origin: oci-portfolio, checked both
+          # through public DNS and pinned straight to the Oracle origin. Bounded retries; needs 3
+          # consecutive passes so a flapping site is not reported healthy.
+          set -u
+          probe() {
+            local label="$1" out code
+            shift
+            out="$(curl --silent --show-error --max-time 10 --proto '=https' --tlsv1.2 --output /dev/null \
+              --dump-header - --write-out '\nHTTP_CODE:%{http_code}\n' "$@" "https://${SITE}/healthz" 2>&1)" ||
+              { echo "  $label: request failed: $(tail -n1 <<<"$out")"; return 1; }
+            code="$(sed -n 's/^HTTP_CODE://p' <<<"$out")"
+            [ "$code" = 200 ] || { echo "  $label: HTTP $code"; return 1; }
+            tr -d '\r' <<<"$out" | grep -qi '^x-origin: oci-portfolio$' ||
+              { echo "  $label: X-Origin header missing or wrong"; return 1; }
+            echo "  $label: ok"
+          }
+          streak=0
+          for attempt in $(seq 1 12); do
+            echo "attempt $attempt/12"
+            if probe public && probe origin --resolve "${SITE}:443:${DEPLOY_HOST}"; then
+              streak=$((streak + 1))
+              if [ "$streak" -ge 3 ]; then echo "verified: healthy on public DNS and on the origin"; exit 0; fi
+              sleep 3
+            else
+              streak=0
+              sleep 5
+            fi
+          done
+          echo "VERIFICATION FAILED"
+          exit 1
+          EOF
+          chmod +x "$RUNNER_TEMP/verify.sh"
 
-      - name: Verify public site is served from Oracle
+      - name: Deploy (host validates the digest, switches, health-checks, auto-restores on failure)
+        id: deploy
         run: |
-          curl -fsSI https://weeksitsolutions.com/healthz | tee /dev/stderr | grep -i '^x-origin: oci-portfolio'
+          set -euo pipefail
+          ssh target "deploy ${IMAGE}" | tee "$RUNNER_TEMP/deploy.out"
+          # A no-op ("already deployed") means a later verification failure is not this release's fault.
+          if grep -q '^already deployed' "$RUNNER_TEMP/deploy.out"; then echo "noop=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Verify the public site
+        id: verify
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/verify.sh"
+
+      - name: Roll back (only if the deployed release is still the live one)
+        id: rollback
+        if: >-
+          always() && steps.deploy.outputs.noop != 'true' && (steps.deploy.outcome == 'failure' ||
+          steps.deploy.outcome == 'cancelled' || steps.verify.outcome == 'failure' || steps.verify.outcome == 'cancelled')
+        run: |
+          set +e
+          # Exit 75 = the host is still finishing an earlier request (it survives a dropped SSH session);
+          # wait for it instead of reporting a rollback failure.
+          for attempt in 1 2 3 4 5 6 7 8; do
+            ssh target "rollback ${IMAGE}"
+            rc=$?
+            [ "$rc" -eq 75 ] || break
+            echo "host is busy (attempt ${attempt}/8); waiting"
+            sleep 15
+          done
+          case "$rc" in
+            0) echo "rolled back to the previous release" ;;
+            20) echo "the deployed release is not live (the host already restored the previous one); nothing to roll back" ;;
+            21) echo "::error::no authorized rollback target is recorded; manual attention required"; exit 1 ;;
+            255) echo "::error::could not reach the host; production state is UNKNOWN"; exit 1 ;;
+            *) echo "::error::ROLLBACK FAILED (exit ${rc}); production needs manual attention"; exit 1 ;;
+          esac
+          if "$RUNNER_TEMP/verify.sh"; then
+            echo "post-rollback verification passed"
+          else
+            echo "::error::site is NOT healthy after rollback; production needs manual attention"
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify.outcome }}
+          ROLLBACK_OUTCOME: ${{ steps.rollback.outcome }}
+        run: |
+          {
+            echo "### Production deploy"
+            echo "- image: \`${IMAGE}\`"
+            echo "- deploy: ${DEPLOY_OUTCOME}"
+            echo "- public verification: ${VERIFY_OUTCOME}"
+            echo "- rollback: ${ROLLBACK_OUTCOME}"
+          } >> "$GITHUB_STEP_SUMMARY"

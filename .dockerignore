@@ -5,6 +5,6 @@
 compose.yaml
 Dockerfile
 README.md
-deploy/*.sh
+deploy/host
 deploy/Caddyfile.snippet
 docs

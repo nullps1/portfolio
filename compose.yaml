@@ -1,6 +1,7 @@
 services:
   portfolio:
-    # CI deploys a pinned ghcr.io image via PORTFOLIO_IMAGE; locally it builds from this directory.
+    # Build-from-source file for local use and the original manual deploy. Production releases from CI
+    # use the root-owned deploy/host/compose.yaml through the restricted portfolio-deploy program instead.
     image: ${PORTFOLIO_IMAGE:-portfolio:local}
     build:
       context: .

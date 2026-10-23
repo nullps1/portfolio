@@ -1,0 +1,473 @@
+#!/bin/bash
+# portfolio-deploy: the only privileged deployment entry point for the portfolio container.
+#
+# Installed root:root 0755 at /usr/local/sbin/portfolio-deploy and run through sudo by the
+# restricted CI account (sudoers allows exactly this path with NO arguments). The request
+# arrives in SSH_ORIGINAL_COMMAND (set by sshd from the CI client) and is validated here
+# against a fixed grammar, independently of any SSH-level restriction:
+#
+#   status
+#   deploy   ghcr.io/nullps1/portfolio@sha256:<64 hex>
+#   rollback ghcr.io/nullps1/portfolio@sha256:<64 hex>   (the release expected to be live)
+#
+# Everything else (container, compose file, image repository, paths, ports) is fixed below.
+# It never executes anything from a repository checkout or any non-root-owned location.
+#
+# Exit codes: 0 ok | 2 bad request | 10 deploy failed, previous release restored
+#             11 failure and restore ALSO failed (site may be down) | 12 image refused, nothing changed
+#             20 rollback not applicable (expected release is not live) | 21 no authorized rollback target
+#             75 another deployment is running | 77 not root / trust check failed | 78 state file invalid
+#             79 state could not be written (nothing was overwritten; the next run reconciles)
+set -Eeuo pipefail
+umask 077
+export LC_ALL=C
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+IFS=$' \t\n'
+unset BASH_ENV ENV CDPATH GLOBIGNORE DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG DOCKER_TLS_VERIFY \
+  DOCKER_CERT_PATH COMPOSE_FILE COMPOSE_PROJECT_NAME COMPOSE_PROFILES COMPOSE_ENV_FILES PORTFOLIO_IMAGE
+# Survive the SSH session dropping mid-deployment: a half-finished switch is worse than a slow one.
+trap '' HUP PIPE
+
+# ---- fixed configuration: nothing here is read from the environment or the request ----
+readonly CONTAINER="portfolio"
+readonly PROJECT="portfolio"
+readonly SOURCE_LABEL="https://github.com/nullps1/portfolio"
+readonly DEPLOY_DIR="/opt/portfolio-deploy"
+readonly COMPOSE_FILE_PATH="${DEPLOY_DIR}/compose.yaml"
+readonly STATE_DIR="/var/lib/portfolio-deploy"
+readonly STATE_FILE="${STATE_DIR}/state"
+readonly LOCK_FILE="${STATE_DIR}/lock"
+readonly DOCKER_CFG="${STATE_DIR}/docker-config"
+readonly LOG_FILE="/var/log/portfolio-deploy.log"
+readonly ORIGIN_URL="http://127.0.0.1:8081/healthz"
+readonly EXPECTED_ORIGIN="oci-portfolio"
+readonly HEALTH_TRIES=45
+readonly HEALTH_SLEEP=2
+readonly ORIGIN_TRIES=5
+readonly PULL_TIMEOUT=300
+readonly COMPOSE_TIMEOUT=120
+readonly REQUIRE_ROOT=1
+readonly TRUSTED_UID=0
+readonly MAX_HISTORY=10
+readonly MAX_REQUEST_LEN=160
+# ---- end fixed configuration ----
+
+# Never inherit the caller's HOME or Docker/curl configuration: use an empty, root-only Docker config
+# (so registry pulls are anonymous) and root's own home.
+export HOME=/root
+export DOCKER_CONFIG="$DOCKER_CFG"
+
+readonly RE_REQUEST='^(deploy|rollback) (ghcr\.io/nullps1/portfolio@sha256:[0-9a-f]{64})$'
+readonly RE_DIGEST_REF='^ghcr\.io/nullps1/portfolio@sha256:[0-9a-f]{64}$'
+readonly RE_IMAGE_ID='^sha256:[0-9a-f]{64}$'
+
+OP=""
+REF=""
+S_CURRENT=""
+S_PREVIOUS=""
+S_PENDING=""
+S_HISTORY=""
+S_RESULT=""
+
+log() {
+  { printf '%s [%s] %s\n' "$(date -u +%FT%TZ)" "$$" "$*" >>"$LOG_FILE"; } 2>/dev/null || true
+  logger -t portfolio-deploy -- "$*" 2>/dev/null || true
+}
+say() {
+  log "$*"
+  { printf '%s\n' "$*"; } 2>/dev/null || true
+}
+die() { # code message
+  local code="$1"
+  shift
+  say "ERROR: $*"
+  exit "$code"
+}
+
+# ---------- request parsing (pure; no side effects) ----------
+parse_request() {
+  local raw="${*:-${SSH_ORIGINAL_COMMAND:-}}"
+  if [ "${#raw}" -gt "$MAX_REQUEST_LEN" ] || [[ $raw == *[[:cntrl:]]* ]]; then
+    die 2 "request rejected (length or control characters)"
+  fi
+  if [ "$raw" = "status" ]; then
+    OP="status"
+  elif [[ $raw =~ $RE_REQUEST ]]; then
+    OP="${BASH_REMATCH[1]}"
+    REF="${BASH_REMATCH[2]}"
+  else
+    die 2 "request rejected; allowed: status | deploy <digest ref> | rollback <digest ref>"
+  fi
+}
+
+valid_ref() { [[ $1 =~ $RE_DIGEST_REF || $1 =~ $RE_IMAGE_ID ]]; }
+
+# ---------- trust checks on every privileged dependency ----------
+trusted_file() { # path kind(file|dir) max_other_bits(octal mask that must be clear)
+  local p="$1" kind="$2" mask="$3" owner mode
+  if [ -L "$p" ]; then die 77 "trust check failed: $p is a symlink"; fi
+  if [ "$kind" = dir ] && [ ! -d "$p" ]; then die 77 "trust check failed: $p missing"; fi
+  if [ "$kind" = file ] && [ ! -f "$p" ]; then die 77 "trust check failed: $p missing"; fi
+  read -r owner mode < <(stat -c '%u %a' -- "$p")
+  if [ "$owner" != "$TRUSTED_UID" ]; then die 77 "trust check failed: $p not owned by root"; fi
+  if (((8#$mode & 8#$mask) != 0)); then die 77 "trust check failed: $p mode $mode too permissive"; fi
+}
+
+trust_checks() {
+  trusted_file "${BASH_SOURCE[0]}" file 022
+  trusted_file "$DEPLOY_DIR" dir 022
+  trusted_file "$COMPOSE_FILE_PATH" file 022
+  # Create when missing, but never "repair" ownership or modes: a wrong one must fail the check below.
+  if [ ! -e "$STATE_DIR" ]; then install -d -m 0700 -- "$STATE_DIR"; fi
+  if [ ! -e "$DOCKER_CFG" ]; then install -d -m 0700 -- "$DOCKER_CFG"; fi
+  trusted_file "$STATE_DIR" dir 077
+  trusted_file "$DOCKER_CFG" dir 077
+  if [ -e "$STATE_FILE" ]; then trusted_file "$STATE_FILE" file 077; fi
+  if [ -e "$LOG_FILE" ]; then trusted_file "$LOG_FILE" file 002; fi
+}
+
+# ---------- state ----------
+push_history() { # ref: newest first, de-duplicated, bounded
+  local ref="$1" out="$1" t n=1
+  [ -n "$ref" ] || return 0
+  for t in $S_HISTORY; do
+    [ "$t" = "$ref" ] && continue
+    n=$((n + 1))
+    [ "$n" -gt "$MAX_HISTORY" ] && break
+    out="$out $t"
+  done
+  S_HISTORY="$out"
+}
+
+in_history() { # ref
+  local t
+  for t in $S_HISTORY; do [ "$t" = "$1" ] && return 0; done
+  return 1
+}
+
+load_state() {
+  [ -f "$STATE_FILE" ] || return 0
+  local k v t
+  while IFS='=' read -r k v; do
+    case "$k" in
+      current | previous | pending)
+        if [ -n "$v" ] && ! valid_ref "$v"; then die 78 "state invalid: $k"; fi
+        case "$k" in
+          current) S_CURRENT="$v" ;;
+          previous) S_PREVIOUS="$v" ;;
+          pending) S_PENDING="$v" ;;
+        esac
+        ;;
+      history)
+        for t in $v; do valid_ref "$t" || die 78 "state invalid: history"; done
+        S_HISTORY="$v"
+        ;;
+      last_result) S_RESULT="${v//[^a-z-]/}" ;;
+      last_time | '') ;;
+      *) die 78 "state invalid: unknown key" ;;
+    esac
+  done <"$STATE_FILE"
+}
+
+save_state() {
+  # Every step is checked: a failed write must never replace a good state file (callers run inside
+  # `|| rc=$?` contexts where `set -e` does not apply).
+  local tmp
+  tmp="$(mktemp -- "${STATE_DIR}/state.XXXXXX")" || die 79 "cannot create a state file; previous state kept"
+  if ! {
+    printf 'current=%s\n' "$S_CURRENT" &&
+      printf 'previous=%s\n' "$S_PREVIOUS" &&
+      printf 'pending=%s\n' "$S_PENDING" &&
+      printf 'history=%s\n' "$S_HISTORY" &&
+      printf 'last_result=%s\n' "$S_RESULT" &&
+      printf 'last_time=%s\n' "$(date -u +%FT%TZ)"
+  } >"$tmp" 2>/dev/null; then
+    rm -f -- "$tmp"
+    die 79 "cannot write state; previous state kept"
+  fi
+  if ! { sync -- "$tmp" 2>/dev/null || sync; }; then
+    rm -f -- "$tmp"
+    die 79 "cannot flush state; previous state kept"
+  fi
+  if ! mv -f -- "$tmp" "$STATE_FILE"; then
+    rm -f -- "$tmp"
+    die 79 "cannot replace state; previous state kept"
+  fi
+}
+
+# ---------- docker helpers (fixed container / project / compose file only) ----------
+tail_clean() { printf '%s' "$1" | tr -c '[:print:]' ' ' | tail -c 400; }
+
+# `container inspect` (not bare `inspect`) so a missing container can never match an IMAGE named "portfolio".
+running_image_id() { timeout 30 docker container inspect --format '{{.Image}}' "$CONTAINER" 2>/dev/null; }
+
+container_health() {
+  timeout 30 docker container inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+    "$CONTAINER" 2>/dev/null || echo missing
+}
+
+# Image IDs are handed to compose through a stable local tag, so a bare "sha256:<id>" is never parsed as a
+# repository name; digest refs are used as they are.
+local_tag_for() {
+  if [[ $1 =~ $RE_IMAGE_ID ]]; then printf 'portfolio-rollback:id-%s' "${1:7:12}"; else printf '%s' "$1"; fi
+}
+
+pull_image() { # ref: anonymous pull; the reason is logged (root-only log) instead of discarded
+  local out
+  out="$(timeout "$PULL_TIMEOUT" docker pull --quiet "$1" 2>&1)" || {
+    log "pull failed for $1: $(tail_clean "$out")"
+    return 1
+  }
+}
+
+image_id_of() { timeout 30 docker image inspect --format '{{.Id}}' "$1" 2>/dev/null; }
+
+verify_image() { # ref: must be linux/arm64 and built from this repository
+  local meta
+  meta="$(timeout 30 docker image inspect \
+    --format '{{.Os}}/{{.Architecture}} {{index .Config.Labels "org.opencontainers.image.source"}}' "$1" 2>/dev/null)" || return 1
+  [ "$meta" = "linux/arm64 ${SOURCE_LABEL}" ]
+}
+
+compose_up() { # ref
+  local use out
+  use="$(local_tag_for "$1")"
+  if [ "$use" != "$1" ]; then
+    timeout 30 docker tag "$1" "$use" >/dev/null 2>&1 || {
+      log "cannot tag $1 as $use"
+      return 1
+    }
+  fi
+  out="$(PORTFOLIO_IMAGE="$use" timeout "$COMPOSE_TIMEOUT" docker compose \
+    --project-name "$PROJECT" --project-directory "$DEPLOY_DIR" --file "$COMPOSE_FILE_PATH" \
+    --env-file /dev/null up --detach --no-build --pull never --force-recreate --no-deps "$CONTAINER" 2>&1)" || {
+    log "compose up failed for $1: $(tail_clean "$out")"
+    return 1
+  }
+}
+
+wait_healthy() {
+  local i
+  for ((i = 0; i < HEALTH_TRIES; i++)); do
+    [ "$(container_health)" = healthy ] && return 0
+    sleep "$HEALTH_SLEEP"
+  done
+  return 1
+}
+
+origin_ok() { # HTTP 200 and the expected X-Origin from the local origin
+  local i hdr
+  for ((i = 0; i < ORIGIN_TRIES; i++)); do
+    if hdr="$(curl --silent --max-time 5 --output /dev/null --dump-header - "$ORIGIN_URL" 2>/dev/null | tr -d '\r')" &&
+      grep -qE '^HTTP/[0-9.]+ 200' <<<"$hdr" &&
+      grep -qiE "^x-origin: ${EXPECTED_ORIGIN}\$" <<<"$hdr"; then
+      return 0
+    fi
+    sleep "$HEALTH_SLEEP"
+  done
+  return 1
+}
+
+switch_to() { # ref: recreate ONLY the portfolio service on ref and verify it
+  local ref="$1" want have
+  compose_up "$ref" || {
+    log "compose up failed for $ref"
+    return 1
+  }
+  wait_healthy || {
+    log "container not healthy after switch to $ref"
+    return 1
+  }
+  origin_ok || {
+    log "origin check failed after switch to $ref"
+    return 1
+  }
+  want="$(image_id_of "$ref")" || return 1
+  have="$(running_image_id)" || return 1
+  [ "$want" = "$have" ] || {
+    log "running image $have does not match requested $want"
+    return 1
+  }
+}
+
+ensure_local_image() { # ref: pull digest refs if absent, then verify; image-ID refs must already exist
+  local ref="$1"
+  if ! image_id_of "$ref" >/dev/null; then
+    [[ $ref =~ $RE_DIGEST_REF ]] || return 1
+    pull_image "$ref" || return 1
+  fi
+  verify_image "$ref" || [[ $ref =~ $RE_IMAGE_ID ]]
+}
+
+keep_rollback_tag() { # keep the running release's image from being garbage-collected (one stable tag per image ID)
+  local id
+  id="$(running_image_id)" || return 0
+  [[ $id =~ $RE_IMAGE_ID ]] || return 0
+  timeout 30 docker tag "$id" "$(local_tag_for "$id")" >/dev/null 2>&1 || true
+}
+
+# ---------- state reconciliation (interrupted runs) ----------
+bootstrap_if_needed() {
+  local id
+  if [ -z "$S_CURRENT" ] && id="$(running_image_id)" && [[ $id =~ $RE_IMAGE_ID ]]; then
+    S_CURRENT="$id"
+    push_history "$id"
+    save_state
+    log "state bootstrapped from running container $id"
+  fi
+}
+
+reconcile() {
+  [ -n "$S_PENDING" ] || return 0
+  local pending="$S_PENDING" running pid
+  log "found interrupted transition to $pending"
+  running="$(running_image_id || true)"
+  pid="$(image_id_of "$pending" || true)"
+  if [ -n "$running" ] && [ "$running" = "$pid" ] && [ "$(container_health)" = healthy ]; then
+    S_CURRENT="$pending"
+    push_history "$pending"
+    S_RESULT="recovered-new"
+    log "adopted $pending: it was live and healthy when the previous run was interrupted"
+  elif [ -n "$S_CURRENT" ]; then
+    if [ "$running" != "$(image_id_of "$S_CURRENT" || true)" ] || [ "$(container_health)" != healthy ]; then
+      log "restoring $S_CURRENT after interrupted transition"
+      if ensure_local_image "$S_CURRENT" && switch_to "$S_CURRENT"; then
+        S_RESULT="recovered-old"
+      else
+        S_RESULT="recovery-failed"
+      fi
+    fi
+  fi
+  S_PENDING=""
+  save_state
+}
+
+# ---------- operations ----------
+op_status() {
+  load_state
+  say "current=${S_CURRENT:-none}"
+  say "previous=${S_PREVIOUS:-none}"
+  say "pending=${S_PENDING:-none}"
+  say "last_result=${S_RESULT:-none}"
+  say "running=$(running_image_id || echo none) health=$(container_health)"
+}
+
+op_deploy() {
+  local ref="$1" prev
+  if [ "$ref" = "$S_CURRENT" ] && [ "$(container_health)" = healthy ]; then
+    say "already deployed: $ref"
+    return 0
+  fi
+  say "deploy requested: $ref (live: ${S_CURRENT:-none})"
+  if ! pull_image "$ref"; then
+    S_RESULT="refused-pull"
+    save_state
+    say "refused: could not pull $ref; nothing changed"
+    return 12
+  fi
+  if ! verify_image "$ref"; then
+    S_RESULT="refused-image"
+    save_state
+    say "refused: image is not linux/arm64 built from ${SOURCE_LABEL}; nothing changed"
+    return 12
+  fi
+  keep_rollback_tag
+  prev="$S_CURRENT"
+  # Re-deploying the live ref (e.g. it was unhealthy) must not overwrite the recorded rollback target.
+  if [ "$prev" = "$ref" ]; then prev="$S_PREVIOUS"; fi
+  S_PREVIOUS="$prev"
+  S_PENDING="$ref"
+  push_history "$prev"
+  save_state
+
+  if switch_to "$ref"; then
+    S_CURRENT="$ref"
+    S_PENDING=""
+    S_RESULT="deployed"
+    push_history "$ref"
+    save_state
+    say "deployed: $ref (previous: ${prev:-none})"
+    return 0
+  fi
+
+  say "deploy failed verification; restoring ${prev:-none}"
+  if [ -n "$prev" ] && ensure_local_image "$prev" && switch_to "$prev"; then
+    S_CURRENT="$prev"
+    S_PENDING=""
+    S_RESULT="deploy-failed-restored"
+    save_state
+    say "restored: $prev is live again"
+    return 10
+  fi
+  S_PENDING=""
+  S_RESULT="restore-failed"
+  save_state
+  say "CRITICAL: restore failed; the site may be down"
+  return 11
+}
+
+op_rollback() {
+  local expected="$1" target
+  if [ "$S_CURRENT" != "$expected" ]; then
+    say "rollback not applicable: $expected is not the live release (live: ${S_CURRENT:-none})"
+    return 20
+  fi
+  target="$S_PREVIOUS"
+  if [ -z "$target" ] || ! valid_ref "$target" || ! in_history "$target"; then
+    say "no authorized rollback target recorded"
+    return 21
+  fi
+  if ! ensure_local_image "$target"; then
+    say "rollback target $target is unavailable locally and cannot be pulled"
+    return 21
+  fi
+  say "rolling back $expected -> $target"
+  S_PENDING="$target"
+  S_PREVIOUS="" # cleared up front, so even an interrupted rollback can never flip back to the rejected release
+  save_state
+  if switch_to "$target"; then
+    S_CURRENT="$target"
+    S_PREVIOUS="" # never allow flipping back to the release that was just rejected
+    S_PENDING=""
+    S_RESULT="rolled-back"
+    push_history "$target"
+    save_state
+    say "rolled back: $target is live"
+    return 0
+  fi
+  S_PENDING=""
+  S_RESULT="rollback-failed"
+  save_state
+  say "CRITICAL: rollback to $target failed; the site may be down"
+  return 11
+}
+
+main() {
+  parse_request "$@"
+  if [ "$REQUIRE_ROOT" = 1 ] && [ "$(id -u)" -ne 0 ]; then die 77 "must run as root (via sudo)"; fi
+  trust_checks
+  [ -e "$LOG_FILE" ] || install -m 0640 -o "$TRUSTED_UID" /dev/null "$LOG_FILE" 2>/dev/null || true
+
+  if [ "$OP" = status ]; then
+    op_status
+    return 0
+  fi
+
+  exec 9>>"$LOCK_FILE"
+  if ! flock -n 9; then die 75 "another deployment is in progress"; fi
+
+  load_state
+  bootstrap_if_needed
+  reconcile
+
+  local rc=0
+  case "$OP" in
+    deploy) op_deploy "$REF" || rc=$? ;;
+    rollback) op_rollback "$REF" || rc=$? ;;
+  esac
+  log "finished op=$OP ref=${REF:-none} rc=$rc result=${S_RESULT:-none}"
+  return "$rc"
+}
+
+main "$@"

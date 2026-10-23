@@ -1,0 +1,35 @@
+# Installed root-owned at /opt/portfolio-deploy/compose.yaml and used ONLY by portfolio-deploy.
+# The image is supplied by the deploy program (a validated ghcr.io digest), never built here.
+name: portfolio
+services:
+  portfolio:
+    image: ${PORTFOLIO_IMAGE:?set by portfolio-deploy}
+    pull_policy: never
+    container_name: portfolio
+    # Enforced here so an image cannot choose to run as root.
+    user: "101:101"
+    restart: unless-stopped
+    # Loopback only: the host Caddy proxies to it. Not reachable from the internet.
+    ports:
+      - "127.0.0.1:8081:8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    cpus: 0.25
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
