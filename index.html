@@ -2,211 +2,273 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Noah | Portfolio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; connect-src 'self'; img-src 'self'; font-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Weeks IT Solutions | Software, tools and infrastructure</title>
     <meta
       name="description"
-      content="Professional portfolio of Noah, showcasing full-stack, backend, and systems-focused projects."
+      content="Weeks IT Solutions builds backend software, command-line tools and automation in Rust, Python and Java, and runs them on Linux and Docker infrastructure."
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap"
-      rel="stylesheet"
+    <link rel="canonical" href="https://weeksitsolutions.com/" />
+    <meta name="theme-color" content="#0c1016" />
+    <meta name="color-scheme" content="dark" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Weeks IT Solutions" />
+    <meta property="og:title" content="Weeks IT Solutions" />
+    <meta
+      property="og:description"
+      content="Backend software, developer tools and the infrastructure to run them. Rust, Python, Java, Linux and Docker."
     />
-    <link rel="stylesheet" href="styles.css" />
+    <meta property="og:url" content="https://weeksitsolutions.com/" />
+    <meta property="og:image" content="https://weeksitsolutions.com/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Weeks IT Solutions: backend software, developer tools and infrastructure." />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="/assets/fonts/inter-latin-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/inter-latin-600.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/script.js" defer></script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Weeks IT Solutions",
+        "url": "https://weeksitsolutions.com/",
+        "email": "noah@weeksitsolutions.com",
+        "sameAs": ["https://github.com/nullps1", "https://x.com/nullps1"]
+      }
+    </script>
   </head>
   <body>
-    <a class="skip-link" href="#home">Skip to content</a>
-
-    <div class="ambient" aria-hidden="true">
-      <span class="blob blob-a"></span>
-      <span class="blob blob-b"></span>
-      <span class="grid"></span>
-    </div>
+    <a class="skip-link" href="#main">Skip to content</a>
 
     <header class="site-header">
-      <a class="brand" href="#home">NW</a>
-      <button class="menu-toggle" aria-label="Toggle menu" aria-expanded="false">Menu</button>
-      <nav class="site-nav">
-        <a href="#about">About</a>
-        <a href="#projects">Projects</a>
-        <a href="#skills">Skills</a>
-        <a href="#contact">Contact</a>
-      </nav>
+      <div class="wrap bar">
+        <a class="wordmark" href="#top">
+          <img src="/favicon.svg" alt="" width="24" height="24" />
+          <span>Weeks IT Solutions</span>
+        </a>
+        <nav aria-label="Primary">
+          <ul>
+            <li><a href="#work">Work</a></li>
+            <li><a href="#capabilities">Capabilities</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ul>
+        </nav>
+      </div>
     </header>
 
-    <main id="home">
-      <section class="hero reveal">
-        <p class="eyebrow">Available for freelance and full-time roles</p>
-        <h1>I build reliable, maintainable software and practical solutions to real-world problems.</h1>
-        <p class="lead">
-          I am <strong>Noah</strong>, a full-stack developer with a strong interest in systems
-          design, backend infrastructure, and modern web technologies.
-        </p>
-        <p class="hero-subline">Rust • Full-Stack Development • Backend Systems • DevOps</p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#projects">View My Work</a>
-          <a class="btn btn-ghost" href="#contact">Book a Call</a>
+    <main id="main">
+      <section id="top" class="hero wrap" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <h1 id="hero-title">Backend software, developer tools and the infrastructure to run them.</h1>
+          <p class="lead">
+            Weeks IT Solutions builds command-line tools, services and automation in Rust, Python and Java,
+            and runs them on Linux and Docker infrastructure that it administers. Run by&nbsp;Noah.
+          </p>
+          <p class="actions">
+            <a class="btn" href="mailto:noah@weeksitsolutions.com">Email Noah</a>
+            <a class="text-link" href="https://github.com/nullps1" rel="noopener noreferrer">Browse the code on GitHub</a>
+          </p>
         </div>
-        <ul class="quick-stats">
-          <li><span>Full-Stack</span> production-focused delivery</li>
-          <li><span>Backend</span> APIs, databases, and infrastructure</li>
-          <li><span>System Design</span> maintainable architecture</li>
-        </ul>
-        <div class="hero-links" aria-label="Primary profile links">
-          <a href="https://github.com/nullps1" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <a href="https://x.com/nullps1" target="_blank" rel="noopener noreferrer">X</a>
-          <a href="https://weeksitsolutions.com" target="_blank" rel="noopener noreferrer">Website</a>
-        </div>
+        <dl class="facts">
+          <div>
+            <dt>Languages</dt>
+            <dd>Rust, Python, Java</dd>
+          </div>
+          <div>
+            <dt>Infrastructure</dt>
+            <dd>Linux, Docker, nginx, Caddy</dd>
+          </div>
+          <div>
+            <dt>Automation</dt>
+            <dd>GitHub Actions, local models with Ollama</dd>
+          </div>
+        </dl>
       </section>
 
-      <section id="about" class="section about reveal">
-        <div class="section-head">
-          <p class="eyebrow">About</p>
-          <h2>Engineering with strategy, design, and execution in mind</h2>
-        </div>
-        <p>
-          Full-stack developer focused on building reliable, maintainable software and practical
-          solutions to real-world problems. I work across the stack with an interest in systems
-          design, backend infrastructure, and modern web technologies.
-        </p>
-      </section>
+      <section id="work" class="section wrap" aria-labelledby="work-title">
+        <header class="section-head">
+          <h2 id="work-title"><span class="index" aria-hidden="true">01</span>Selected work</h2>
+          <p>Three public projects, described from their repositories. Each links to the source.</p>
+        </header>
 
-      <section id="projects" class="section reveal">
-        <div class="section-head">
-          <p class="eyebrow">Selected Work</p>
-          <h2>Open-source projects and tools</h2>
-        </div>
-        <div class="project-grid">
-          <article class="project-card">
-            <div class="project-top">
-              <p class="tag">Security Tooling</p>
-              <h3>nullscan</h3>
-            </div>
-            <p>
-              Security-focused scanning utility designed for practical workflows, repeatable runs,
-              and clean maintenance over time.
-            </p>
-            <ul class="project-points">
-              <li>Built for real-world scan automation</li>
-              <li>Focus on reliable output and maintainability</li>
-            </ul>
-            <ul class="tech-list" aria-label="Technologies used in nullscan">
-              <li>Rust</li>
-              <li>CLI</li>
-              <li>Automation</li>
-            </ul>
-            <div class="project-actions">
-              <a href="https://github.com/nullps1/nullscan" target="_blank" rel="noopener noreferrer" aria-label="Open nullscan on GitHub">View repository</a>
-            </div>
-          </article>
+        <ol class="work">
+          <li>
+            <article class="project" aria-labelledby="p-nullcode">
+              <div class="project-main">
+                <h3 id="p-nullcode">NullBrain / NullCode</h3>
+                <p>
+                  A software-development agent that runs entirely on a Raspberry Pi with local models. It takes a
+                  task, generates Java with a local Ollama model, compiles and tests the result in a locked-down
+                  container, attempts a bounded number of repairs, and prepares a draft pull request only when a
+                  human asks it to.
+                </p>
+                <ul>
+                  <li>Inference stays on the host; nothing leaves it except the explicit publish step.</li>
+                  <li>Candidate code is built and tested in Docker containers with no network access.</li>
+                  <li>A review gate can refuse a commit, and a human grants the edit scope and triggers publishing.</li>
+                </ul>
+              </div>
+              <dl class="meta">
+                <div><dt>Stack</dt><dd>Python, Rust (Axum), SQLite, Docker, Ollama</dd></div>
+                <div><dt>Status</dt><dd>In active development</dd></div>
+                <div><dt>Source</dt><dd><a href="https://github.com/nullps1/nullbrain" rel="noopener noreferrer">github.com/nullps1/nullbrain</a></dd></div>
+              </dl>
+            </article>
+          </li>
 
-          <article class="project-card">
-            <div class="project-top">
-              <p class="tag">Developer Tooling</p>
-              <h3>tsmngr</h3>
-            </div>
-            <p>
-              TypeScript-powered manager utility that improves day-to-day development workflows with
-              automation and project maintenance helpers.
-            </p>
-            <ul class="project-points">
-              <li>Developer ergonomics first</li>
-              <li>Automates repetitive project tasks</li>
-            </ul>
-            <ul class="tech-list" aria-label="Technologies used in tsmngr">
-              <li>TypeScript</li>
-              <li>Node.js</li>
-              <li>Automation</li>
-            </ul>
-            <div class="project-actions">
-              <a href="https://github.com/nullps1/tsmngr" target="_blank" rel="noopener noreferrer" aria-label="Open tsmngr on GitHub">View repository</a>
-            </div>
-          </article>
+          <li>
+            <article class="project" aria-labelledby="p-nullscan">
+              <div class="project-main">
+                <h3 id="p-nullscan">NullScan</h3>
+                <p>
+                  A cross-platform TCP port scanner written in Rust. It scans hosts and CIDR ranges concurrently,
+                  identifies services from banners with a confidence score, checks results against an offline
+                  vulnerability database, and exports JSON, CSV, Markdown or HTML reports.
+                </p>
+                <ul>
+                  <li>Asynchronous scanning on Tokio with configurable concurrency and an optional ping sweep.</li>
+                  <li>Prebuilt binaries are published on GitHub Releases, and the repository runs CI.</li>
+                  <li>Use it only on networks you are authorized to test.</li>
+                </ul>
+              </div>
+              <dl class="meta">
+                <div><dt>Stack</dt><dd>Rust, Tokio, Clap, Serde</dd></div>
+                <div><dt>Status</dt><dd>Released, v1.6.0 · MIT license</dd></div>
+                <div><dt>Source</dt><dd><a href="https://github.com/nullps1/nullscan" rel="noopener noreferrer">github.com/nullps1/nullscan</a></dd></div>
+              </dl>
+            </article>
+          </li>
 
-          <article class="project-card">
-            <div class="project-top">
-              <p class="tag">System Utility</p>
-              <h3>reg-cleaner</h3>
-            </div>
-            <p>
-              Practical maintenance utility for cleanup workflows, built to simplify system
-              housekeeping while keeping behavior predictable.
-            </p>
-            <ul class="project-points">
-              <li>Clear and practical cleanup flow</li>
-              <li>Designed for dependable repeat usage</li>
-            </ul>
-            <ul class="tech-list" aria-label="Technologies used in reg-cleaner">
-              <li>Systems</li>
-              <li>Maintenance</li>
-              <li>Open Source</li>
-            </ul>
-            <div class="project-actions">
-              <a href="https://github.com/nullps1/reg-cleaner" target="_blank" rel="noopener noreferrer" aria-label="Open reg-cleaner on GitHub">View repository</a>
-            </div>
-          </article>
-        </div>
-      </section>
+          <li>
+            <article class="project" aria-labelledby="p-copperworks">
+              <div class="project-main">
+                <h3 id="p-copperworks">Copperworks</h3>
+                <p>
+                  A Minecraft mod for NeoForge 1.21.1 that adds copper tools and armor which oxidize over time.
+                  Equipment moves through four stages, changing its durability wear, mining speed, damage and
+                  defense. Players can wax a piece to freeze its stage or scrape it back with an axe.
+                </p>
+                <ul>
+                  <li>Oxidation is probabilistic and faster in water and rain, so it behaves like weathering, not a timer.</li>
+                  <li>Balance values are configurable on the server.</li>
+                  <li>Requires Java 21; multiplayer needs the same version on the server and every client.</li>
+                </ul>
+              </div>
+              <dl class="meta">
+                <div><dt>Stack</dt><dd>Java 21, NeoForge</dd></div>
+                <div><dt>Status</dt><dd>Released, v1.0.0</dd></div>
+                <div><dt>Source</dt><dd><a href="https://github.com/nullps1/copperworks" rel="noopener noreferrer">github.com/nullps1/copperworks</a></dd></div>
+              </dl>
+            </article>
+          </li>
+        </ol>
 
-      <section id="skills" class="section reveal">
-        <div class="section-head">
-          <p class="eyebrow">Capabilities</p>
-          <h2>Technical strengths and focus areas</h2>
-        </div>
-        <ul class="skill-list">
-          <li>Rust</li>
-          <li>Full-Stack Development</li>
-          <li>Backend Systems</li>
-          <li>APIs</li>
-          <li>Databases</li>
-          <li>Automation</li>
-          <li>DevOps</li>
-          <li>System Design</li>
-          <li>Open Source</li>
-          <li>Freelance Consulting</li>
-        </ul>
-      </section>
-
-      <section id="contact" class="section contact reveal">
-        <div class="section-head">
-          <p class="eyebrow">Contact</p>
-          <h2>Let us build something great together</h2>
-        </div>
-        <p>
-          Tell me about your project, timeline, and goals. I typically respond within 24 hours.
-        </p>
-        <a class="btn btn-primary" href="mailto:noah@weeksitsolutions.com">noah@weeksitsolutions.com</a>
-
-        <div class="online-links" aria-label="Find me online">
-          <h3>Find Me Online</h3>
+        <div class="more">
+          <h3>More public repositories</h3>
           <ul>
             <li>
-              <span>GitHub</span>
-              <a href="https://github.com/nullps1" target="_blank" rel="noopener noreferrer">@nullps1</a>
+              <a href="https://github.com/nullps1/logslueth" rel="noopener noreferrer">logSleuth</a>
+              <span>Rust command-line log analyzer with regex filtering and a severity summary.</span>
             </li>
             <li>
-              <span>X</span>
-              <a href="https://x.com/nullps1" target="_blank" rel="noopener noreferrer">@nullps1</a>
-            </li>
-            <li>
-              <span>Website</span>
-              <a href="https://weeksitsolutions.com" target="_blank" rel="noopener noreferrer">weeksitsolutions.com</a>
-            </li>
-            <li>
-              <span>Email</span>
-              <a href="mailto:noah@weeksitsolutions.com">noah@weeksitsolutions.com</a>
+              <a href="https://github.com/nullps1/tsmngr" rel="noopener noreferrer">TSMngr</a>
+              <span>Rust ticket manager for the terminal with SQLite storage and Markdown export.</span>
             </li>
           </ul>
         </div>
       </section>
+
+      <section id="capabilities" class="section wrap" aria-labelledby="cap-title">
+        <header class="section-head">
+          <h2 id="cap-title"><span class="index" aria-hidden="true">02</span>What I work with</h2>
+          <p>Areas backed by the projects above and by how this site is built and run.</p>
+        </header>
+        <dl class="spec">
+          <div>
+            <dt>Software</dt>
+            <dd>Command-line tools, backend services and local APIs in Rust, Python and Java, with automated tests.</dd>
+          </div>
+          <div>
+            <dt>Infrastructure</dt>
+            <dd>
+              This website and my own services run in containers on a Linux VM behind a TLS reverse proxy,
+              with health checks and uptime monitoring.
+            </dd>
+          </div>
+          <div>
+            <dt>Automation</dt>
+            <dd>GitHub Actions for tests and releases, and scripted workflows that remove repetitive manual steps.</dd>
+          </div>
+          <div>
+            <dt>Local AI</dt>
+            <dd>Self-hosted model workflows with Ollama, designed so that a person reviews what the model produces.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section id="about" class="section wrap" aria-labelledby="about-title">
+        <header class="section-head">
+          <h2 id="about-title"><span class="index" aria-hidden="true">03</span>About</h2>
+        </header>
+        <div class="about">
+          <p>
+            Weeks IT Solutions is Noah&rsquo;s software and technology practice. The work is small, practical tools
+            and the systems that keep them running: software that does one job, says what it does and does not do,
+            and can be operated by someone other than its author.
+          </p>
+          <ul class="principles">
+            <li>
+              <h3>Bounded by design</h3>
+              <p>Automation gets explicit limits. NullCode caps its repair attempts and never publishes without a human command.</p>
+            </li>
+            <li>
+              <h3>Operable</h3>
+              <p>Services run in containers with health checks, so a failure is visible and a bad release can be reverted.</p>
+            </li>
+            <li>
+              <h3>Honest scope</h3>
+              <p>Documentation states what a tool does not do as clearly as what it does.</p>
+            </li>
+          </ul>
+          <p>
+            My background includes surveying and construction technology. That practical field experience shapes how
+            I build: tools that turn raw field data into something usable and checkable.
+          </p>
+        </div>
+      </section>
+
+      <section id="contact" class="section wrap" aria-labelledby="contact-title">
+        <header class="section-head">
+          <h2 id="contact-title"><span class="index" aria-hidden="true">04</span>Contact</h2>
+        </header>
+        <p class="contact-lead">
+          Email is the best way to reach me. A short description of the problem and what you have tried is enough
+          to start.
+        </p>
+        <p class="email"><a href="mailto:noah@weeksitsolutions.com">noah@weeksitsolutions.com</a></p>
+        <ul class="elsewhere">
+          <li><a href="https://github.com/nullps1" rel="noopener noreferrer">GitHub <span>@nullps1</span></a></li>
+          <li><a href="https://x.com/nullps1" rel="noopener noreferrer">X <span>@nullps1</span></a></li>
+        </ul>
+      </section>
     </main>
 
     <footer class="site-footer">
-      <p>© <span id="year"></span> Noah. All rights reserved.</p>
+      <div class="wrap">
+        <p>Weeks IT Solutions</p>
+        <p><a href="https://github.com/nullps1/portfolio" rel="noopener noreferrer">Source for this site</a></p>
+      </div>
     </footer>
-
-    <script src="script.js"></script>
   </body>
 </html>

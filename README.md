@@ -1,21 +1,13 @@
-# Professional Portfolio Website
+# Weeks IT Solutions website
 
-A polished, responsive portfolio website built with plain HTML, CSS, and JavaScript.
+Source for <https://weeksitsolutions.com>: a single static page (HTML, CSS and a small vanilla JavaScript file)
+served by nginx in a container.
 
-## Quick Start
+```bash
+python -m http.server 8099      # then open http://127.0.0.1:8099/
+node tests/check-site.mjs       # static checks: references, metadata, CSP-readiness, contrast
+node tests/check-links.mjs      # external links (needs network)
+```
 
-1. Open `index.html` directly in your browser.
-2. For live reload in VS Code, use the Live Server extension and click "Go Live".
-
-## Customize Content
-
-- Replace `Your Name` and `you@example.com` in `index.html`.
-- Update project cards in the `#projects` section.
-- Edit skills in the `#skills` section.
-- Adjust colors in `styles.css` under `:root` variables.
-
-## Files
-
-- `index.html`: Page structure and content
-- `styles.css`: Styling, responsive layout, and visual theme
-- `script.js`: Mobile menu, current year, and reveal animations
+Site structure, design tokens, content editing and the production boundary are documented in
+[docs/WEBSITE.md](docs/WEBSITE.md). Deployment is documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

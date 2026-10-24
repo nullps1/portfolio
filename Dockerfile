@@ -6,7 +6,8 @@ LABEL org.opencontainers.image.source="https://github.com/nullps1/portfolio" \
       org.opencontainers.image.revision="${GIT_SHA}"
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY index.html script.js styles.css /usr/share/nginx/html/
+COPY index.html styles.css script.js favicon.svg robots.txt /usr/share/nginx/html/
+COPY assets/ /usr/share/nginx/html/assets/
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

@@ -41,15 +41,15 @@ pipeline last deployed without updating its recorded rollback state.
 From the repo root:
 
 ```bash
-tar -c Dockerfile .dockerignore compose.yaml index.html script.js styles.css deploy/nginx.conf \
+tar -c Dockerfile .dockerignore compose.yaml index.html script.js styles.css favicon.svg robots.txt assets deploy/nginx.conf \
   | ssh ubuntu@129.146.74.225 'cd /srv/apps/portfolio && tar -x && docker compose up -d --build'
 ```
 
 ## Caddy
 
 `deploy/Caddyfile.snippet` makes `weeksitsolutions.com` canonical and 301-redirects `www`. It adds gzip/zstd,
-basic security headers and HSTS (`max-age=63072000`, no preload, no includeSubDomains). There is **no CSP**
-because the page loads Google Fonts; add one only after testing.
+basic security headers and HSTS (`max-age=63072000`, no preload, no includeSubDomains). There is **no CSP header**;
+the page carries a restrictive CSP `<meta>` tag instead (fonts are self-hosted). A header is preferable because it also allows `frame-ancestors`; add one after testing.
 
 Apply it only once DNS points at this server, to avoid failed ACME attempts:
 
