@@ -10,4 +10,8 @@ node tests/check-links.mjs      # external links (needs network)
 ```
 
 Site structure, design tokens, content editing and the production boundary are documented in
-[docs/WEBSITE.md](docs/WEBSITE.md). Deployment is documented in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+[docs/WEBSITE.md](docs/WEBSITE.md).
+
+Production releases go **GitHub Actions -> GHCR -> Oracle** through the manually triggered, approval-gated Deploy
+workflow. Nothing deploys on push, and nothing should be built or copied onto the server by hand. The procedure,
+rollback and host layout are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

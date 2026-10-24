@@ -75,3 +75,22 @@ the reverse proxy. Do not add third-party hosts without extending the policy del
 is there because Lighthouse downloads `robots.txt` with an in-page fetch; without it the audit fails even though the
 file is served correctly. Tools that inject scripts into the page are still blocked by `script-src`, so run them
 through the DevTools protocol (as the checks described above do) instead of adding a script tag.
+
+## Testing
+
+```bash
+node tests/check-site.mjs     # no dependencies; run before every commit
+node tests/check-links.mjs    # external links; some sites refuse bots and report BLOCKED
+```
+
+Browser-level checks (axe-core, Lighthouse, keyboard and viewport tests) are run with throwaway tooling kept
+outside the repository, so the site has no `package.json`. Reproduce them with `puppeteer-core`, `axe-core` and
+`lighthouse` against a local server. Inject axe through the DevTools protocol (`page.evaluate(axeSource)`), not
+with a script tag, because the CSP blocks injected scripts.
+
+## Production boundary
+
+Editing the site never changes production, and neither does pushing to `main`. Publication is a separate, deliberate
+step: run the Deploy workflow and, after the build, approve the Production deployment, as described in
+[DEPLOYMENT.md](DEPLOYMENT.md) (GitHub Actions -> GHCR -> Oracle). Changes to `Dockerfile`, `deploy/` and `.github/`
+are infrastructure changes and are reviewed separately from content changes.

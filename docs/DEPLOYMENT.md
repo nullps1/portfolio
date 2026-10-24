@@ -7,51 +7,67 @@ host's existing Caddy, which terminates TLS.
 Internet -> Oracle IP :80/:443 -> host Caddy (systemd) -> 127.0.0.1:8081 -> portfolio container (nginx :8080)
 ```
 
-## Server (verified 2026-10-22)
+**Releases go GitHub Actions -> GHCR -> Oracle, and only that way.** The first release through this path was
+workflow run 40122021217 on 2026-10-24 (commit `40626f0`, image
+`ghcr.io/nullps1/portfolio@sha256:898d0f85e3fd3a5c8f701505d6b23fa0e4cfe1218e4753dab23c9c7217d1a09e`).
+
+## Releasing a change (the supported workflow)
+
+1. Merge or push the change to `main`. Pushing does **not** deploy: the Deploy workflow has no push trigger.
+2. Run `tests/check-site.mjs` locally (see `WEBSITE.md`), then start the workflow:
+   `gh workflow run deploy.yml --ref main` (or Actions > Deploy > Run workflow, branch `main`).
+3. The `build` job pushes `ghcr.io/nullps1/portfolio:sha-<commit>` for `linux/arm64` and records the immutable digest.
+   Check the digest, architecture and `org.opencontainers.image.revision` label against the commit.
+4. The `deploy` job waits for the **Production** environment. The reviewer approves it in the GitHub UI. Nothing on
+   the server changes before that.
+5. After approval the job calls `portfolio-deploy deploy <digest>` over the restricted SSH key, then verifies the
+   public site. On any failure it rolls back automatically and the job fails.
+6. Confirm afterwards: the job is green, `sudo /usr/local/sbin/portfolio-deploy status` shows `current=<digest>`,
+   `last_result=deployed`, and `https://weeksitsolutions.com/healthz` returns 200 with `X-Origin: oci-portfolio`.
+
+Do not run `docker compose` against the portfolio container by hand, do not build images on the server, and do not
+copy site files onto the host. See "Legacy manual deployment (retired)".
+
+## Server (verified 2026-10-22, updated 2026-10-24)
 
 - Ubuntu 24.04 ARM64 (2 vCPU, 11 GiB RAM shared with Minecraft), Docker 29.x, Compose v5.
 - Caddy 2.6.2 runs on the host (not in Docker) and owns ports 80/443. Its config is `/etc/caddy/Caddyfile`.
   Host Caddy cannot join Docker networks, so the container publishes to **loopback only**
   (`127.0.0.1:8081`), the same convention as homepage, uptime-kuma, and portainer.
-- App directory: `/srv/apps/portfolio`, alongside the other apps in `/srv/apps`.
+- The portfolio container is a Compose project named `portfolio` whose compose file is the root-owned
+  `/opt/portfolio-deploy/compose.yaml`. The other apps live in `/srv/apps`; `/srv/apps/portfolio` is a retired
+  legacy directory and is not used by any release.
 - The container sits alone on its own network, `portfolio_default`. It is not attached to any other stack.
+- The GHCR package `ghcr.io/nullps1/portfolio` is **public**; the host pulls anonymously and stores no registry
+  credentials.
+- Containers cannot reach the OCI instance metadata service: see "Metadata firewall guard".
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | `nginx-unprivileged` pinned by digest, copies the three site files |
+| `Dockerfile` | `nginx-unprivileged` pinned by digest; copies the page files, `robots.txt`, `favicon.svg` and `assets/`. Used by the CI build. New site files must be added to its `COPY` lines or they are not shipped. |
 | `deploy/nginx.conf` | Serves on 8080, `/healthz`, `X-Origin: oci-portfolio` header; no gzip or access log (Caddy does both) |
-| `compose.yaml` | Build-from-source compose file for local use and the original manual deploy |
-| `deploy/Caddyfile.snippet` | Site blocks to append to `/etc/caddy/Caddyfile` |
+| `compose.yaml` | Build-from-source file for **local experiments only**. Never use it on the Oracle host: it uses the same project and container name as production. |
+| `deploy/Caddyfile.snippet` | Reference copy of the site blocks applied to `/etc/caddy/Caddyfile` |
 | `deploy/host/portfolio-deploy` | The privileged deploy/rollback program installed on the host (see "Automated deployment") |
 | `deploy/host/compose.yaml` | Root-owned production compose file used only by that program: loopback port, `user: 101:101`, read-only rootfs, all caps dropped, 64 MiB / 0.25 CPU / 64 pids, log rotation, healthcheck |
 | `deploy/host/install.sh` | One-time, idempotent provisioning of the CI account, sudoers rule, program and state directories |
 | `deploy/host/test/run-tests.sh` | Sandboxed tests of the program with mocked docker/curl (no root, no real containers) |
 | `deploy/host/test/verify-boundaries.sh` | Post-provisioning proof that the CI account can do nothing but deploy |
-| `.github/workflows/deploy.yml` | Build ARM64 image, push to GHCR, approved deploy by digest, verify, roll back (manual trigger) |
+| `deploy/host/imds/` | The metadata firewall guard: script, systemd units, installer, tests and runbook (see its `README.md`) |
+| `.github/workflows/deploy.yml` | Build ARM64 image, push to GHCR, approved deploy by digest, verify, roll back (manual trigger only) |
 | `.github/dependabot.yml` | Weekly update PRs for the SHA-pinned actions |
-
-## Manual deploy / update (build on the server)
-
-This is how the first release was deployed. **Retire it once the restricted pipeline is provisioned**: both
-paths manage a container named `portfolio`, and a manual `docker compose up` would replace whatever release the
-pipeline last deployed without updating its recorded rollback state.
-
-From the repo root:
-
-```bash
-tar -c Dockerfile .dockerignore compose.yaml index.html script.js styles.css favicon.svg robots.txt assets deploy/nginx.conf \
-  | ssh ubuntu@129.146.74.225 'cd /srv/apps/portfolio && tar -x && docker compose up -d --build'
-```
 
 ## Caddy
 
 `deploy/Caddyfile.snippet` makes `weeksitsolutions.com` canonical and 301-redirects `www`. It adds gzip/zstd,
 basic security headers and HSTS (`max-age=63072000`, no preload, no includeSubDomains). There is **no CSP header**;
-the page carries a restrictive CSP `<meta>` tag instead (fonts are self-hosted). A header is preferable because it also allows `frame-ancestors`; add one after testing.
+the page carries a restrictive CSP `<meta>` tag instead (fonts are self-hosted). A header is preferable because it also
+allows `frame-ancestors`; add one after testing.
 
-Apply it only once DNS points at this server, to avoid failed ACME attempts:
+The snippet is already applied on the host. To re-apply it on a fresh server, do it only once DNS points at that
+server, to avoid failed ACME attempts:
 
 ```bash
 sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak
@@ -79,13 +95,15 @@ There are no AAAA records; add one only if the server gets IPv6 and Caddy is ver
 ## Health, logs, status
 
 ```bash
-docker ps --filter name=portfolio          # STATUS shows (healthy)
-docker logs --tail 50 portfolio            # nginx errors (rotated: 3 x 5 MB)
-curl -s http://127.0.0.1:8081/healthz      # on the server
-sudo journalctl -u caddy -n 50 --no-pager  # access log and certificate events
+sudo /usr/local/sbin/portfolio-deploy status    # current / previous release, last result, running image and health
+sudo tail -n 40 /var/log/portfolio-deploy.log   # one line per deploy decision (root:adm)
+docker ps --filter name=portfolio               # STATUS shows (healthy)
+docker logs --tail 50 portfolio                 # nginx errors (rotated: 3 x 5 MB)
+curl -s http://127.0.0.1:8081/healthz           # on the server
+sudo journalctl -u caddy -n 50 --no-pager       # access log and certificate events
 ```
 
-## Automated deployment (implemented in the repo; not provisioned or enabled)
+## Automated deployment (in production use since 2026-10-24)
 
 ```
 workflow_dispatch (main only)
@@ -165,14 +183,16 @@ detect an interrupted transition and either adopt a release that came up healthy
 5. `DEPLOY_HOST` must be an IPv4 literal (curl `--resolve` pins to it) and `DEPLOY_USER` a plain account name; both
    are validated before they are written into the SSH config.
 
-### Provisioning checklist (nothing below has been done yet)
+### Provisioning record (completed 2026-10-23/24)
+
+This was done once and is kept as the procedure for rebuilding the host or the GitHub side from scratch.
 
 1. On the host, as an admin: copy `deploy/host/{install.sh,portfolio-deploy,compose.yaml}` and run
    `sudo ./install.sh --pubkey-file ci_key.pub`. It creates the account, files, and sudoers rule, validating the
    sudoers file with `visudo` before installing it. It accepts only a plain one-line `ssh-ed25519` key (verified
    with `ssh-keygen`; only the key type and blob are kept) and refuses to adopt a pre-existing
    `portfolio-deploy` account that owns any files.
-2. Run `deploy/host/test/verify-boundaries.sh <host> <ci_key>` and require 0 failures.
+2. Run `deploy/host/test/verify-boundaries.sh <host> <ci_key>` and require 0 failures (24 checks passed on this host).
 3. GitHub, on the `Production` environment: required reviewer, deployment branch policy `main`, admin bypass
    off. Self-review: with a single maintainer, leave "prevent self-review" **off**, otherwise no run can ever be
    approved.
@@ -180,18 +200,19 @@ detect an interrupted transition and either adopt a release that came up healthy
    read from `/etc/ssh/ssh_host_ed25519_key.pub`, not from `ssh-keyscan`); environment **variables**
    `DEPLOY_HOST=129.146.74.225` and `DEPLOY_USER=portfolio-deploy`. Delete the private key from the workstation
    after upload.
-5. GHCR packages are private after their first push, and the host pulls anonymously. So order the first run as:
-   start the workflow, let the `build` job finish and push, set the package to **public** (the image contains only
-   this public repo's static files), then approve the waiting `deploy` job. A private package would need a registry
-   token stored on the host; avoid that.
-6. Install `logrotate` (`sudo apt install logrotate`); it is not present today, so the rotation file `install.sh`
-   writes is inert without it.
-7. Run the first deploy supervised, with the Uptime Kuma monitor and `journalctl -t portfolio-deploy -f` open.
-   Expect a few seconds of downtime while Compose recreates the container (it adopts the existing `portfolio`
-   container: same project, service and container name, same `portfolio_default` network).
+5. The GHCR package must be **public** because the host pulls anonymously; a private package would need a registry
+   token stored on the host, which is avoided. On a brand-new package: start the workflow, let `build` finish and
+   push, set the package to public in the package settings, then approve the waiting `deploy` job. The inspection
+   that preceded the first release checked the image anonymously: architecture, user `101`, healthcheck, labels, and
+   that the three added layers contain only the expected files.
+6. Install `logrotate` (`sudo apt install logrotate`); the rotation file `install.sh` writes is inert without it.
+7. Run the first deploy supervised, with the Uptime Kuma monitor open. Expect a few seconds of downtime while
+   Compose recreates the container (it adopts the existing `portfolio` container: same project, service and
+   container name, same `portfolio_default` network).
 
-The program bootstraps its state from the container that is running when it is first invoked, so the current
-manual release becomes the first rollback target.
+The program bootstraps its state from the container that is running when it is first invoked. On this host the
+pre-pipeline image (`sha256:a8f0660e…`, kept locally as `portfolio-rollback:id-a8f0660e012b`) became the first
+rollback target.
 
 ## Rollback
 
@@ -204,21 +225,50 @@ sudo /usr/local/sbin/portfolio-deploy rollback ghcr.io/nullps1/portfolio@sha256:
 
 Caddy-level problem: restore `/etc/caddy/Caddyfile.pre-portfolio` and `sudo systemctl reload caddy`.
 
+## Metadata firewall guard
+
+Containers must not reach the OCI instance metadata service (`169.254.169.254`). The guard keeps three rules at the
+top of `DOCKER-USER` (UDP/TCP 53 to that address are allowed, everything else is rejected) through a systemd unit
+ordered after `netfilter-persistent` and before Docker, plus a 60-second repair timer. Design, tests, runbook and
+rollback are in [`deploy/host/imds/README.md`](../deploy/host/imds/README.md). Check it with
+`sudo /usr/local/sbin/pd-imds-guard verify --live` and `systemctl --failed`. Never run `netfilter-persistent save`
+on this host: its snapshot is stale and would persist outdated Docker rules.
+
+## Legacy manual deployment (retired)
+
+Before the pipeline, the site was built on the server from `/srv/apps/portfolio` with `docker compose up -d --build`
+(files copied with `tar | ssh`), and `deploy.sh` swapped images using the admin account's Docker-group rights, with its
+own rollback bookkeeping in `.previous`. **None of this is supported any more.**
+
+- `/srv/apps/portfolio` still exists on the host as an obsolete copy (old site files, its own `compose.yaml`,
+  `deploy/deploy.sh`, `.env`, `.previous`). Nothing reads it and no container mounts it.
+- Danger: that directory's `compose.yaml` has the **same Compose project name and container name** (`portfolio`) as
+  the production project. Running `docker compose up` there would recreate the production container from an old
+  image, without updating the deploy program's recorded state or its rollback target.
+- The same applies to building images on the server and to `docker run` / `docker rm` on the `portfolio` container.
+- The directory is scheduled for removal after review; see the cleanup inventory kept with the maintainer. Until it
+  is removed, treat it as read-only history.
+
 ## Removing the pipeline
 
 `sudo rm /etc/sudoers.d/portfolio-deploy`, `sudo userdel -r portfolio-deploy`, then remove
 `/usr/local/sbin/portfolio-deploy`, `/opt/portfolio-deploy`, `/var/lib/portfolio-deploy`, and the environment
-secrets. The running container is left as is.
+secrets. The running container is left as is. Doing this without a replacement leaves the site with no supported
+way to release.
 
 ## Open items
 
 - UDP 443 is not allowed in iptables, so Caddy's HTTP/3 won't work; browsers fall back to HTTP/2.
 - Whether the Oracle public IP is reserved can only be confirmed in the OCI console (Networking > Reserved public IPs).
+- OCI IAM: the instance-principal credentials are no longer reachable from containers, but whether the instance's
+  dynamic group has any policy attached can only be checked in the OCI console (Identity > Domains > Dynamic groups,
+  Policies). Least privilege there is the real fix.
 - Uptime Kuma monitor "Portfolio (weeksitsolutions.com)" checks `https://weeksitsolutions.com/healthz` every 60 s and
   uses the same email notification as the other monitors. It was added directly to Kuma's database (backup in
   `/srv/backups/uptime-kuma/`); edit or pause it in the Kuma UI like any other.
 - GitHub-hosted runner IP ranges are too broad to restrict the CI key with `from=`; the key's only power is
   to run the validating program.
+- Nothing alerts on a failed guard timer or a failed deploy outside GitHub and `systemctl --failed`.
 
 ### Accepted residual risks (from the independent review)
 
@@ -227,10 +277,11 @@ secrets. The running container is left as is.
   radius is bounded (user 101, all capabilities dropped, read-only rootfs, no-new-privileges, loopback port, memory
   and pid limits), but a malicious image could serve arbitrary content on the site. Stronger fixes: verify a
   cosign/GitHub attestation bound to this repo's `main` workflow, or keep an allowlist of CI-registered digests.
-- **Container egress is unrestricted** on the default bridge (internet, the OCI metadata service, host services bound
-  to 0.0.0.0). Filtering it needs DOCKER-USER firewall rules, which this change deliberately does not make.
+- **Container egress is otherwise unrestricted** on the default bridge (internet, host services bound to 0.0.0.0).
+  Only the metadata service is blocked, by the guard above. Containers that use `network_mode: host`, and anything
+  holding `docker.sock` (portainer, homepage), bypass it.
 - **Rollback images accumulate.** One `portfolio-rollback:id-*` tag is kept per previous bootstrap image; prune old
-  ones by hand with `docker image rm`.
-- **Tested with mocks.** `run-tests.sh` mocks `docker` and `curl` and patches the program's path and timing
-  constants. The real sudo/SSH path, the Compose adoption of the existing container, and real healthcheck timing are
-  first exercised by `verify-boundaries.sh` and the supervised first deploy.
+  ones by hand with `docker image rm`, and never the current or the recorded previous release.
+- **Tested with mocks, then in production.** `run-tests.sh` mocks `docker` and `curl` and patches the program's path
+  and timing constants. The real sudo/SSH path, the Compose adoption of the existing container, and real healthcheck
+  timing were first exercised by `verify-boundaries.sh` and the supervised first deployment (2026-10-24).

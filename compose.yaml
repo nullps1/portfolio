@@ -1,7 +1,8 @@
 services:
   portfolio:
-    # Build-from-source file for local use and the original manual deploy. Production releases from CI
-    # use the root-owned deploy/host/compose.yaml through the restricted portfolio-deploy program instead.
+    # Build-from-source file for local experiments ONLY. Never run it on the Oracle host: it uses the same
+    # project and container name as production. Releases go GitHub Actions -> GHCR -> the restricted
+    # portfolio-deploy program, which uses the root-owned deploy/host/compose.yaml (see docs/DEPLOYMENT.md).
     image: ${PORTFOLIO_IMAGE:-portfolio:local}
     build:
       context: .
