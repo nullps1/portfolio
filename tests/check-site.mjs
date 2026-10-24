@@ -79,6 +79,8 @@ check("heading levels never skip", levels.every((l, i) => i === 0 || l <= levels
 check("skip link targets main", /class="skip-link" href="#main"/.test(html) && /<main id="main">/.test(html));
 check("landmarks: header, nav, main, footer", ["<header", "<nav", "<main", "<footer"].every((t) => html.includes(t)));
 check("every img has alt", [...html.matchAll(/<img\b[^>]*>/g)].every((m) => /\balt="/.test(m[0])));
+check("exactly three featured projects, each linking to a github.com/nullps1 repository", (html.match(/<article class="project"/g) ?? []).length === 3 && (html.match(/<dd><a href="https:\/\/github\.com\/nullps1\/[A-Za-z0-9._-]+" rel="noopener noreferrer">github\.com\/nullps1\//g) ?? []).length === 3);
+check("every img declares width and height (no layout shift)", [...html.matchAll(/<img\b[^>]*>/g)].every((m) => /\bwidth="\d+"/.test(m[0]) && /\bheight="\d+"/.test(m[0])));
 check("no aria-label that could contradict visible link text", !/<a\b[^>]*aria-label=/.test(html));
 check("sections are named by their headings", [...html.matchAll(/<section\b[^>]*>/g)].every((m) => /aria-labelledby=/.test(m[0])));
 const labelled = [...html.matchAll(/aria-labelledby="([^"]+)"/g)].map((m) => m[1]);

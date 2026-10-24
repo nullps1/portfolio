@@ -108,7 +108,7 @@
               <div class="project-main">
                 <h3 id="p-nullcode">NullBrain / NullCode</h3>
                 <p>
-                  A software-development agent that runs entirely on a Raspberry Pi with local models. It takes a
+                  A software-development workflow that runs entirely on a Raspberry Pi with local models. It takes a
                   task, generates Java with a local Ollama model, compiles and tests the result in a locked-down
                   container, attempts a bounded number of repairs, and prepares a draft pull request only when a
                   human asks it to.
@@ -120,9 +120,42 @@
                 </ul>
               </div>
               <dl class="meta">
-                <div><dt>Stack</dt><dd>Python, Rust (Axum), SQLite, Docker, Ollama</dd></div>
-                <div><dt>Status</dt><dd>In active development</dd></div>
+                <div><dt>Stack</dt><dd>Python (standard library only), Rust (Axum), SQLite, Docker, Ollama</dd></div>
+                <div><dt>Status</dt><dd>Working pipeline, version 0.1.0</dd></div>
                 <div><dt>Source</dt><dd><a href="https://github.com/nullps1/nullbrain" rel="noopener noreferrer">github.com/nullps1/nullbrain</a></dd></div>
+              </dl>
+            </article>
+          </li>
+
+          <li>
+            <article class="project" aria-labelledby="p-arcane">
+              <div class="project-main">
+                <h3 id="p-arcane">Arcane Extraction</h3>
+                <p>
+                  A Minecraft mod for NeoForge 1.21.1 that adds a workstation block. It moves one chosen enchantment
+                  from an enchanted item onto a book and keeps the exact level. The extraction rules are kept apart
+                  from the block and menu code, and the server decides whether a request is valid.
+                </p>
+                <ul>
+                  <li>The client sends only an enchantment ID. The server re-checks the open menu, the player&rsquo;s distance and the item&rsquo;s real enchantments before changing anything.</li>
+                  <li>25 JUnit tests cover the extraction rules, the inventory transaction, hopper automation and the block model. Multiplayer behaviour was checked by hand; there are no automated in-game tests.</li>
+                  <li>Version 1.0.1 fixed a crash with Quark&rsquo;s Ancient Tomes, caused by removing a default item component instead of resetting it.</li>
+                </ul>
+                <figure class="shot">
+                  <img
+                    src="/assets/arcane-extractor-gui.png"
+                    width="368"
+                    height="480"
+                    loading="lazy"
+                    alt="The Arcane Extractor screen in game: a source item and book slots, a list of the item's enchantments with Efficiency III selected, Extract buttons, a six-slot output grid and the player inventory."
+                  />
+                  <figcaption>The extractor interface in game, cropped from a screenshot in the repository.</figcaption>
+                </figure>
+              </div>
+              <dl class="meta">
+                <div><dt>Stack</dt><dd>Java 21, NeoForge, JUnit 5, Gradle, GitHub Actions</dd></div>
+                <div><dt>Status</dt><dd>Released, v1.0.1 · MIT license</dd></div>
+                <div><dt>Source</dt><dd><a href="https://github.com/nullps1/Arcane-Extractor" rel="noopener noreferrer">github.com/nullps1/Arcane-Extractor</a></dd></div>
               </dl>
             </article>
           </li>
@@ -132,43 +165,20 @@
               <div class="project-main">
                 <h3 id="p-nullscan">NullScan</h3>
                 <p>
-                  A cross-platform TCP port scanner written in Rust. It scans hosts and CIDR ranges concurrently,
-                  identifies services from banners with a confidence score, checks results against an offline
-                  vulnerability database, and exports JSON, CSV, Markdown or HTML reports.
+                  A TCP port scanner written in Rust. It scans hosts and CIDR ranges concurrently, reads service
+                  banners with protocol-specific probes, and exports JSON, CSV, Markdown or HTML reports. An optional
+                  dashboard serves the results locally.
                 </p>
                 <ul>
-                  <li>Asynchronous scanning on Tokio with configurable concurrency and an optional ping sweep.</li>
-                  <li>Prebuilt binaries are published on GitHub Releases, and the repository runs CI.</li>
-                  <li>Use it only on networks you are authorized to test.</li>
+                  <li>Asynchronous scanning on Tokio with configurable concurrency and timeouts, and an optional TCP-based ping sweep that skips hosts that do not answer.</li>
+                  <li>The optional vulnerability check matches banners against a bundled list of CVE records by string, with no version-range comparison, so treat its output as leads to verify.</li>
+                  <li>Linux and Windows binaries are published with SHA-256 checksums, and CI runs on Linux, Windows and macOS. Use it only on networks you are authorized to test.</li>
                 </ul>
               </div>
               <dl class="meta">
-                <div><dt>Stack</dt><dd>Rust, Tokio, Clap, Serde</dd></div>
+                <div><dt>Stack</dt><dd>Rust, Tokio, Clap, Serde, Axum</dd></div>
                 <div><dt>Status</dt><dd>Released, v1.6.0 · MIT license</dd></div>
                 <div><dt>Source</dt><dd><a href="https://github.com/nullps1/nullscan" rel="noopener noreferrer">github.com/nullps1/nullscan</a></dd></div>
-              </dl>
-            </article>
-          </li>
-
-          <li>
-            <article class="project" aria-labelledby="p-copperworks">
-              <div class="project-main">
-                <h3 id="p-copperworks">Copperworks</h3>
-                <p>
-                  A Minecraft mod for NeoForge 1.21.1 that adds copper tools and armor which oxidize over time.
-                  Equipment moves through four stages, changing its durability wear, mining speed, damage and
-                  defense. Players can wax a piece to freeze its stage or scrape it back with an axe.
-                </p>
-                <ul>
-                  <li>Oxidation is probabilistic and faster in water and rain, so it behaves like weathering, not a timer.</li>
-                  <li>Balance values are configurable on the server.</li>
-                  <li>Requires Java 21; multiplayer needs the same version on the server and every client.</li>
-                </ul>
-              </div>
-              <dl class="meta">
-                <div><dt>Stack</dt><dd>Java 21, NeoForge</dd></div>
-                <div><dt>Status</dt><dd>Released, v1.0.0</dd></div>
-                <div><dt>Source</dt><dd><a href="https://github.com/nullps1/copperworks" rel="noopener noreferrer">github.com/nullps1/copperworks</a></dd></div>
               </dl>
             </article>
           </li>
@@ -178,12 +188,16 @@
           <h3>More public repositories</h3>
           <ul>
             <li>
+              <a href="https://github.com/nullps1/copperworks" rel="noopener noreferrer">Copperworks</a>
+              <span>NeoForge 1.21.1 mod: copper tools and armor that oxidize through four stages. Wax freezes a stage, an axe scrapes it back, and the balance is configurable on the server.</span>
+            </li>
+            <li>
               <a href="https://github.com/nullps1/logslueth" rel="noopener noreferrer">logSleuth</a>
               <span>Rust command-line log analyzer with regex filtering and a severity summary.</span>
             </li>
             <li>
               <a href="https://github.com/nullps1/tsmngr" rel="noopener noreferrer">TSMngr</a>
-              <span>Rust ticket manager for the terminal with SQLite storage and Markdown export.</span>
+              <span>Rust ticket manager for the terminal with SQLite or JSON file storage and Markdown export.</span>
             </li>
           </ul>
         </div>

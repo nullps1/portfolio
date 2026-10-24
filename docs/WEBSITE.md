@@ -54,6 +54,11 @@ All values live in `:root` in `styles.css`. Change a token, not the rule that us
   pair, and fill in the description, three evidence-based points and the Stack, Status and Source rows. Read the
   repository first and only use what it states. Only feature **public** repositories; private repositories need
   explicit approval before they appear on the site.
+* **Screenshots**: only real captures of the project, cropped but not edited, stored under `assets/`, with `width`,
+  `height` and descriptive `alt`. A project without a real visual gets none rather than a mock-up.
+* **Selected work vs. more repositories**: three projects are featured; other public repositories belong in the
+  short "More public repositories" list. Choose featured projects on tests, CI, licensing, release hygiene and
+  verified behaviour, not on commit count or recency.
 * **Contact details** appear in the hero button, the contact section and the JSON-LD block. Change all three.
 * Update `<title>`, `description`, `og:*` and the JSON-LD together; `tests/check-site.mjs` checks they agree.
 

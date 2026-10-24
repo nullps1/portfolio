@@ -3,6 +3,15 @@
 *.sh        text eol=lf
 deploy/host/portfolio-deploy text eol=lf
 Dockerfile  text eol=lf
+.gitattributes text eol=lf
+# Website sources: LF in the index and on checkout, so Windows clones show no line-ending churn.
+*.html      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+*.mjs       text eol=lf
+*.md        text eol=lf
+*.svg       text eol=lf
+*.txt       text eol=lf
 *.yml       text eol=lf
 *.yaml      text eol=lf
 *.conf      text eol=lf

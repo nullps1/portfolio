@@ -419,6 +419,24 @@ dt {
   height: 1px;
   background: var(--text-muted);
 }
+/* A real screenshot, shown at its native size so the pixel art stays crisp. */
+.shot {
+  margin: var(--space-3) 0 0;
+}
+.shot img {
+  width: 100%;
+  max-width: 23rem;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  image-rendering: pixelated;
+}
+.shot figcaption {
+  max-width: var(--measure);
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--step--1);
+}
 .meta {
   display: grid;
   gap: var(--space-2);
