@@ -1,0 +1,36 @@
+[Unit]
+Description=Block container access to the OCI instance metadata service (DOCKER-USER)
+Documentation=https://github.com/nullps1/portfolio/blob/main/deploy/host/imds/README.md
+# DefaultDependencies=no avoids the implicit After=basic.target, which would form a cycle with
+# Before=docker.socket (docker.socket is Before=sockets.target, which basic.target waits for).
+DefaultDependencies=no
+Requires=sysinit.target
+After=sysinit.target systemd-modules-load.service local-fs.target
+# After netfilter-persistent, whose snapshot restore replaces the whole table; before anything that can start a container.
+After=netfilter-persistent.service
+Before=docker.service docker.socket containerd.service
+Before=shutdown.target
+Conflicts=shutdown.target
+# Re-applied whenever Docker or netfilter-persistent is restarted through systemd.
+PartOf=docker.service netfilter-persistent.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/pd-imds-guard apply
+TimeoutStartSec=60
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+ProtectSystem=strict
+ReadWritePaths=/run
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+# AF_NETLINK is enough for iptables-nft (the host alternative). A switch to iptables-legacy would need AF_INET.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target docker.service

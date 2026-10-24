@@ -1,0 +1,21 @@
+[Unit]
+Description=Re-check the OCI metadata block and repair it if something replaced the firewall tables
+Documentation=https://github.com/nullps1/portfolio/blob/main/deploy/host/imds/README.md
+After=pd-imds-guard.service docker.service
+
+[Service]
+Type=oneshot
+# Covers a direct `netfilter-persistent reload`, which systemd does not see. A failed run shows up in `systemctl --failed`.
+# The unit fails if the FORWARD jump is wrong even though the rules themselves are fine (apply alone would exit 0).
+ExecStart=/bin/sh -c 'g=/usr/local/sbin/pd-imds-guard; $g verify --live || { $g apply; $g verify --live; }'
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+ProtectSystem=strict
+ReadWritePaths=/run
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes

@@ -6,3 +6,4 @@ Dockerfile  text eol=lf
 *.yml       text eol=lf
 *.yaml      text eol=lf
 *.conf      text eol=lf
+deploy/host/imds/* text eol=lf

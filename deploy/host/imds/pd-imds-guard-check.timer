@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic re-check of the OCI metadata block
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
